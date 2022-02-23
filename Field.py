@@ -40,8 +40,11 @@ class Field:
     def __init__(self, size, perc_of_filled, perc_of_infected) -> None:
         self._SIZE = size
         self._GENERATION = 1
-        self._MAX_ITERATION = 50
+        self._MAX_ITERATION = 500
         self._SLEEP_TIME = 0.1
+
+        self._VACCINATION_BASE_ATTRACTIVENESS = 5e-3
+        self._VACCINATION_ATTRACTIVENESS = 1e-4
 
         self._L_INIT_IMMUNITY = 0.2
         self._U_INIT_IMMUNITY = 0.8
@@ -60,9 +63,11 @@ class Field:
 
         self._SICKNESS_PENALTY = 0.5
         self._CURE_IMMUNITY = 0.2
-        self._VACC_IMMUNITY = 0.4
+        self._VACC_IMMUNITY = 0.3
 
         self._CLEANING_TIME = 3
+
+        self._DEATHS = 1
 
         self.init_pops(perc_of_filled, perc_of_infected)
 
@@ -92,6 +97,7 @@ class Field:
                 self.print_population()
 
             self.random_movement_behaviour()
+            self.vaccinate()
             self.spread_the_disease()
             self.turn_inc_into_inf()
             self.cure_cells()
@@ -154,9 +160,32 @@ class Field:
         if self._POP[i][j]:
             self._POP[i][j][0] = CellStatus.dead.value
             self._POP[i][j][9] = self._GENERATION
+            self._DEATHS += 1
+
+    def vaccinate_cell(self, i, j):
+        if self._POP[i][j]:
+            self._POP[i][j][0] = CellStatus.vaccinated.value
+            self._POP[i][j][7].append(self._VACC_IMMUNITY)
 
     def calc_immunity(self, i, j):
         return self._POP[i][j][1] + sum(self._POP[i][j][7]) - sum(self._POP[i][j][6])
+
+    def vaccinate(self):
+        self.update_statuses()
+
+        self._VACCINATION_ATTRACTIVENESS = (
+            self._VACCINATION_BASE_ATTRACTIVENESS * self._DEATHS
+        )
+
+        for i in range(self._SIZE):
+            for j in range(self._SIZE):
+                if self.statuses[i][j] and (
+                    self.statuses[i][j] == CellStatus.not_infected.value
+                    or self.statuses[i][j] == CellStatus.recovered.value
+                ):
+                    chance = random.random()
+                    if self._VACCINATION_ATTRACTIVENESS > chance:
+                        self.vaccinate_cell(i, j)
 
     def turn_inc_into_inf(self):
         self.update_statuses()
@@ -422,5 +451,5 @@ class Field:
         self.fig.show("notebook")
 
 
-f = Field(size=10, perc_of_filled=20, perc_of_infected=5)
+f = Field(size=14, perc_of_filled=20, perc_of_infected=30)
 f.start_covid()

@@ -1,6 +1,26 @@
 import pygame
 import sys
 
+"""
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+DONT START
+KILLS FAMILIES
+DESTROYES LIVES
+DUMMY
+DUMMY
+DUMMY
+DUMMY
+
+"""
+
 
 class Game:
     def __init__(self):
