@@ -7,19 +7,19 @@
 - [x] Implement infections
 - [x] Impelent dying~~
 - [x] Implement rewards and penalties
-
+___
 **[v.2.0]**
 - [x] Implement vaccination system and vaccination chance
 - [x] Update .md files
-
+___
 **[v.2.1]**
-- [ ] Implement behavior system:
-    - [ ] Points of interest
-    - [ ] Pathfinding
-    - [ ] Family and house
-
+- [x] Implement behavior system:
+    - [x] Points of interest
+    - [x] Pathfinding
+    - [x] Family and house
+___
+**[v.2.2]**
+- [ ] Implement Pygame
+___
 **[v.3]**
 - [ ] Day/night cycle & corresponding behaviour
-
-**[v.4]**
-- [ ] Implement Dash or PyGame

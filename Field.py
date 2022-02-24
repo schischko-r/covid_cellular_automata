@@ -1,13 +1,16 @@
 from IPython.display import clear_output
 from plotly.subplots import make_subplots
 import enum
+import math
 import numpy as np
 import os, platform
 import plotly
 import plotly.graph_objects as go
 import random
 import time
-import math
+from pathfinding.core.diagonal_movement import DiagonalMovement
+from pathfinding.core.grid import Grid
+from pathfinding.finder.a_star import AStarFinder
 
 
 class BColors:
@@ -34,6 +37,8 @@ class CellStatus(enum.Enum):
 
 class CellBehaviour(enum.Enum):
     random = 0
+    heading_home = 1
+    heading_to_work = 2
 
 
 class Field:
@@ -42,6 +47,12 @@ class Field:
         self._GENERATION = 1
         self._MAX_ITERATION = 500
         self._SLEEP_TIME = 0.1
+
+        self._MIN_FAMILY_SIZE = 1
+        self._MAX_FAMILY_SIZE = 5
+
+        self._MIN_AGE = 5
+        self._MAX_AGE = 90
 
         self._VACCINATION_BASE_ATTRACTIVENESS = 5e-3
         self._VACCINATION_ATTRACTIVENESS = 1e-4
@@ -69,14 +80,30 @@ class Field:
 
         self._DEATHS = 1
 
+        self._CHANGING_BEHAVIOUR_LIKENESS = 0.1
+
         self.init_pops(perc_of_filled, perc_of_infected)
 
     def init_pops(self, perc_of_filled, perc_of_infected):
         self._POP = [[None for y in range(self._SIZE)] for x in range(self._SIZE)]
+        self.family_houses = []
+        self.jobs = []
 
         cells_amount = int(round(self._SIZE**2 * perc_of_filled / 100, 0))
-        for cell in range(cells_amount):
-            self.populate_cell()
+        families = math.floor(
+            cells_amount / random.randint(self._MIN_FAMILY_SIZE, self._MAX_FAMILY_SIZE)
+        )
+
+        for family in range(families):
+            self.family_houses.append(
+                (random.randint(0, self._SIZE - 1), random.randint(0, self._SIZE - 1))
+            )
+            self.jobs.append(
+                (random.randint(0, self._SIZE - 1), random.randint(0, self._SIZE - 1))
+            )
+
+            for cell in range(math.floor(cells_amount / families)):
+                self.populate_cell(family)
 
         populated = []
         for i in range(self._SIZE):
@@ -96,7 +123,7 @@ class Field:
             else:
                 self.print_population()
 
-            self.random_movement_behaviour()
+            self.movement_behaviour()
             self.vaccinate()
             self.spread_the_disease()
             self.turn_inc_into_inf()
@@ -105,25 +132,30 @@ class Field:
             self.clean_field()
             time.sleep(self._SLEEP_TIME)
 
-    def populate_cell(self):
+    def populate_cell(self, family_id):
         rand_layer = random.randint(0, self._SIZE - 1)
         rand_cell = random.randint(0, self._SIZE - 1)
 
         if not self._POP[rand_layer][rand_cell]:
             self._POP[rand_layer][rand_cell] = [
-                CellStatus.not_infected.value,
-                random.uniform(self._L_INIT_IMMUNITY, self._U_INIT_IMMUNITY),
-                CellBehaviour.random.value,
-                None,
-                None,
-                None,
-                [],
-                [],
-                [],
-                None,
+                CellStatus.not_infected.value,  # STATUS
+                random.uniform(
+                    self._L_INIT_IMMUNITY, self._U_INIT_IMMUNITY
+                ),  # IMMUNITY
+                [CellBehaviour.random.value, [], False],  # BEHAVIOUR
+                None,  # DATE OF INFECTION
+                None,  # INCUBATION DURATION
+                None,  # INFECTION DURATION
+                [],  # PENALTIES
+                [],  # REWARDS
+                family_id,  # FAMILY
+                None,  # DATE OF DEATH
+                self.family_houses[family_id],  # HOUSE
+                self.jobs[family_id],  # WORK
+                random.randint(self._MIN_AGE, self._MAX_AGE),  # AGE
             ]
         else:
-            self.populate_cell()
+            self.populate_cell(family_id)
 
     def incubate_cell(self, i, j):
         if self._POP[i][j]:
@@ -300,51 +332,92 @@ class Field:
                         if sickness_chance > chance:
                             self.incubate_cell(i, j)
 
-    def random_movement_behaviour(self):
+    def movement_behaviour(self):
         self.update_statuses()
+        self.update_behaviour()
+
         for i in range(self._SIZE):
             for j in range(self._SIZE):
                 if self.statuses[i][j] and self.statuses[i][j] != CellStatus.dead.value:
-                    self.choose_direction_randomly(i, j)
+                    if self._POP[i][j][2][0] == CellBehaviour.random.value:
+                        self.choose_direction_randomly(i, j)
+                    elif self._POP[i][j][2][0] == CellBehaviour.heading_home.value:
+                        self.find_path_home(i, j)
+                    elif self._POP[i][j][2][0] == CellBehaviour.heading_to_work.value:
+                        self.find_path_to_job(i, j)
+
+    def update_behaviour(self):
+        for i in range(self._SIZE):
+            for j in range(self._SIZE):
+                if self.statuses[i][j]:
+                    if self._POP[i][j][2][0] == CellBehaviour.random.value:
+                        chance = random.random()
+                        if chance < self._CHANGING_BEHAVIOUR_LIKENESS:
+                            self._POP[i][j][2][0] = random.choice(
+                                list(CellBehaviour)
+                            ).value
 
     def choose_direction_randomly(self, i, j):
         movement = random.randint(0, 4)
         if movement == 0:
             pass
         elif movement == 1 and not self._POP[(i - 1) % self._SIZE][j]:
-            self.move_up(i, j)
+            self.move_to_cell((i, j), ((i - 1) % self._SIZE, j))
         elif movement == 2 and not self._POP[(i + 1) % self._SIZE][j]:
-            self.move_down(i, j)
+            self.move_to_cell((i, j), ((i + 1) % self._SIZE, j))
         elif movement == 3 and not self._POP[i][(j - 1) % self._SIZE]:
-            self.move_left(i, j)
+            self.move_to_cell((i, j), (i, (j - 1) % self._SIZE))
         elif movement == 4 and not self._POP[i][(j + 1) % self._SIZE]:
-            self.move_right(i, j)
+            self.move_to_cell((i, j), (i, (j + 1) % self._SIZE))
         else:
             self.choose_direction_randomly(i, j)
 
-    def move_up(self, i, j):
-        self._POP[i][j], self._POP[(i - 1) % self._SIZE][j] = (
-            self._POP[(i - 1) % self._SIZE][j],
-            self._POP[i][j],
+    def find_path_home(self, i, j):
+        self.update_statuses()
+        grid = Grid(matrix=self.pathfinging_matrix)
+        start = grid.node(i, j)
+
+        end_i = list(self._POP[i][j][10])[0]
+        end_j = list(self._POP[i][j][10])[1]
+
+        end = grid.node(end_i, end_j)
+
+        finder = AStarFinder(
+            diagonal_movement=DiagonalMovement.always, max_runs=self._SIZE**2
         )
 
-    def move_down(self, i, j):
-        self._POP[i][j], self._POP[(i + 1) % self._SIZE][j] = (
-            self._POP[(i + 1) % self._SIZE][j],
-            self._POP[i][j],
+        path, runs = finder.find_path(start, end, grid)
+        self._POP[i][j][2][1] = path
+
+        self.procede_acc_to_path(i, j)
+
+    def find_path_to_job(self, i, j):
+        self.update_statuses()
+        grid = Grid(matrix=self.pathfinging_matrix)
+        start = grid.node(i, j)
+
+        end_i = list(self._POP[i][j][11])[0]
+        end_j = list(self._POP[i][j][11])[1]
+
+        end = grid.node(end_i, end_j)
+
+        finder = AStarFinder(
+            diagonal_movement=DiagonalMovement.always, max_runs=self._SIZE**2
         )
 
-    def move_left(self, i, j):
-        self._POP[i][j], self._POP[i][(j - 1) % self._SIZE] = (
-            self._POP[i][(j - 1) % self._SIZE],
-            self._POP[i][j],
-        )
+        path, runs = finder.find_path(start, end, grid)
+        self._POP[i][j][2][1] = path
+        self.procede_acc_to_path(i, j)
 
-    def move_right(self, i, j):
-        self._POP[i][j], self._POP[i][(j + 1) % self._SIZE] = (
-            self._POP[i][(j + 1) % self._SIZE],
-            self._POP[i][j],
-        )
+    def procede_acc_to_path(self, i, j):
+        if len(self._POP[i][j][2][1]) != 0 and not self._POP[i][j][2][2]:
+            self.move_to_cell((i, j), self._POP[i][j][2][1][0])
+
+    def move_to_cell(self, start, end):
+        self.update_statuses()
+        if self._POP[end[0]][end[1]] == None:
+            self._POP[end[0]][end[1]] = self._POP[start[0]][start[1]]
+            self._POP[start[0]][start[1]] = None
 
     def neighbours(self, x, i, j):
         return x[
@@ -364,6 +437,13 @@ class Field:
                     tmp_st.append(CellStatus.empty.value)
 
             self.statuses.append(tmp_st)
+
+        self.pathfinging_matrix = []
+        for layer in self.statuses:
+            tmp = []
+            for cell in layer:
+                tmp.append(0 if cell != None else 1)
+            self.pathfinging_matrix.append(tmp)
 
     def print_population(self):
         if platform.system() == "Windows":
