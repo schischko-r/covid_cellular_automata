@@ -1,11 +1,7 @@
-from IPython.display import clear_output
-from plotly.subplots import make_subplots
 import enum
 import math
 import numpy as np
 import os, platform
-import plotly
-import plotly.graph_objects as go
 import random
 import time
 from pathfinding.core.diagonal_movement import DiagonalMovement
@@ -42,14 +38,14 @@ class CellBehaviour(enum.Enum):
 
 
 class Field:
-    def __init__(self, size, perc_of_filled, perc_of_infected) -> None:
+    def __init__(self, size, perc_of_filled, perc_of_infected, sleep_time) -> None:
         self._SIZE = size
         self._GENERATION = 1
         self._MAX_ITERATION = 500
-        self._SLEEP_TIME = 0.1
+        self._SLEEP_TIME = sleep_time
 
         self._MIN_FAMILY_SIZE = 1
-        self._MAX_FAMILY_SIZE = 5
+        self._MAX_FAMILY_SIZE = 8
 
         self._MIN_AGE = 5
         self._MAX_AGE = 90
@@ -58,13 +54,13 @@ class Field:
         self._VACCINATION_ATTRACTIVENESS = 1e-4
 
         self._L_INIT_IMMUNITY = 0.2
-        self._U_INIT_IMMUNITY = 0.8
+        self._U_INIT_IMMUNITY = 0.5
 
-        self._L_INF_FROM_INCUBATED_CHANCE = 0.2
-        self._U_INF_FROM_INCUBATED_CHANCE = 0.4
+        self._L_INF_FROM_INCUBATED_CHANCE = 0.4
+        self._U_INF_FROM_INCUBATED_CHANCE = 0.6
 
-        self._L_INF_FROM_SICK_CHANCE = 0.4
-        self._U_INF_FROM_SICK_CHANCE = 0.8
+        self._L_INF_FROM_SICK_CHANCE = 0.6
+        self._U_INF_FROM_SICK_CHANCE = 0.95
 
         self._L_INC_DURATION = 3
         self._U_INC_DURATION = 9
@@ -72,7 +68,7 @@ class Field:
         self._L_INF_DURATION = 0
         self._U_INF_DURATION = 14
 
-        self._SICKNESS_PENALTY = 0.5
+        self._SICKNESS_PENALTY = 0.2
         self._CURE_IMMUNITY = 0.2
         self._VACC_IMMUNITY = 0.3
 
@@ -116,21 +112,21 @@ class Field:
         for cell in infected:
             self.incubate_cell(cell[0], cell[1])
 
-    def start_covid(self):
-        for self._GENERATION in range(1, self._MAX_ITERATION + 1):
-            if self._SIZE > 15:
-                self.plot_population()
-            else:
-                self.print_population()
+    def iterate_covid(self):
+        self._GENERATION += 1
+        # if self._SIZE > 15:
+        #     self.plot_population()
+        # else:
+        #     self.print_population()
 
-            self.movement_behaviour()
-            self.vaccinate()
-            self.spread_the_disease()
-            self.turn_inc_into_inf()
-            self.cure_cells()
-            self.kill_dying_cells()
-            self.clean_field()
-            time.sleep(self._SLEEP_TIME)
+        self.movement_behaviour()
+        self.vaccinate()
+        self.spread_the_disease()
+        self.turn_inc_into_inf()
+        self.cure_cells()
+        self.kill_dying_cells()
+        self.clean_field()
+        time.sleep(self._SLEEP_TIME)
 
     def populate_cell(self, family_id):
         rand_layer = random.randint(0, self._SIZE - 1)
@@ -200,7 +196,13 @@ class Field:
             self._POP[i][j][7].append(self._VACC_IMMUNITY)
 
     def calc_immunity(self, i, j):
-        return self._POP[i][j][1] + sum(self._POP[i][j][7]) - sum(self._POP[i][j][6])
+        return (
+            self._POP[i][j][1]
+            * (2.5 / math.sqrt(2 * math.pi))
+            * math.exp(-((2 * self._POP[i][j][12] - 1) ** 2))
+            + sum(self._POP[i][j][7])
+            - sum(self._POP[i][j][6])
+        )
 
     def vaccinate(self):
         self.update_statuses()
@@ -269,6 +271,8 @@ class Field:
                         chance = random.random()
                         if chance < chance_of_dying:
                             self.kill_cell(i, j)
+                    if self._POP[i][j][1] < 0:
+                        self.kill_cell(i, j)
 
     def clean_field(self):
         self.update_statuses()
@@ -356,6 +360,21 @@ class Field:
                             self._POP[i][j][2][0] = random.choice(
                                 list(CellBehaviour)
                             ).value
+                    if (
+                        self._POP[i][j][2][0] == CellBehaviour.heading_home.value
+                        or self._POP[i][j][2][0] == CellBehaviour.heading_to_work.value
+                    ):
+                        if len(self._POP[i][j][2][1]) <= 2:
+                            self._POP[i][j][2][2] = True
+
+                    if self._POP[i][j][2][2]:
+                        a = []
+                        for e in CellBehaviour:
+                            a.append(e.value)
+                        a.remove(self._POP[i][j][2][0])
+                        self._POP[i][j][2][0] = random.choice(a)
+
+                        self._POP[i][j][2][2] = False
 
     def choose_direction_randomly(self, i, j):
         movement = random.randint(0, 4)
@@ -410,8 +429,12 @@ class Field:
         self.procede_acc_to_path(i, j)
 
     def procede_acc_to_path(self, i, j):
-        if len(self._POP[i][j][2][1]) != 0 and not self._POP[i][j][2][2]:
-            self.move_to_cell((i, j), self._POP[i][j][2][1][0])
+        if (
+            len(self._POP[i][j][2][1]) != 0
+            and not self._POP[i][j][2][2]
+            and len(self._POP[i][j][2][1]) > 1
+        ):
+            self.move_to_cell((i, j), self._POP[i][j][2][1][1])
 
     def move_to_cell(self, start, end):
         self.update_statuses()
@@ -445,12 +468,14 @@ class Field:
                 tmp.append(0 if cell != None else 1)
             self.pathfinging_matrix.append(tmp)
 
-    def print_population(self):
+    def clear(self):
         if platform.system() == "Windows":
             os.system("cls")
         else:
             os.system("clear")
 
+    def print_population(self):
+        self.clear()
         print(f"== GENERATION {self._GENERATION} ==\n")
 
         self.update_statuses()
@@ -475,61 +500,3 @@ class Field:
                         pretty_line += "💀|"
             print(pretty_line)
             print("-" * self._SIZE * 3)
-
-    def plot_population(self):
-        clear_output()
-        statuses = []
-        immunities = []
-
-        for layer in self._POP:
-            tmp_st = []
-            tmp_im = []
-
-            for pop in layer:
-                if pop:
-                    tmp_st.append(pop[0])
-                    tmp_im.append(pop[1])
-                else:
-                    tmp_st.append(CellStatus.empty.value)
-                    tmp_im.append(CellStatus.empty.value)
-
-            statuses.append(tmp_st)
-            immunities.append(tmp_im)
-
-        if self._GENERATION == 1:
-            self.fig = make_subplots(
-                rows=1, cols=2, subplot_titles=("Cells", "Immunity")
-            )
-            self.fig.add_trace(
-                go.Heatmap(
-                    z=statuses,
-                    type="heatmap",
-                    colorscale=plotly.colors.sequential.Bluered,
-                    showlegend=False,
-                ),
-                row=1,
-                col=1,
-            )
-            self.fig.add_trace(
-                go.Heatmap(
-                    z=immunities,
-                    type="heatmap",
-                    colorscale=plotly.colors.sequential.Bluered,
-                    showlegend=False,
-                ),
-                row=1,
-                col=2,
-            )
-
-        self.fig.update_layout(
-            title_text=f"GENERATION {self._GENERATION}", height=400, width=800
-        )
-        with self.fig.batch_update():
-            self.fig.data[0].z = statuses
-            self.fig.data[1].z = immunities
-
-        self.fig.show("notebook")
-
-
-f = Field(size=14, perc_of_filled=20, perc_of_infected=30)
-f.start_covid()

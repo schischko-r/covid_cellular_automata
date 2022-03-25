@@ -4,36 +4,47 @@
 
 * Each cell has it's own genome in form of a list containing:
 
-```python
-        INDEX   GENOME
-        -----   ------
-        0       STATUS
-        1       IMMUNITY
-        2       BEHAVIOUR
-        3       DATE OF INFECTION
-        4       INCUBATION DURATION
-        5       INFECTION DURATION
-        6       PENALTIES
-        7       REWARDS
-        8       FAMILY 
-        9       DATE OF DEATH
-        10      HOUSE
-        11      WORK
-        12      AGE
+```c
+        TYPE                    GENOME
+        -----                   ------
+        int                     ID
+        enum Status             STATUS
+        float                   IMMUNITY
+        enum Behaviour          BEHAVIOUR
+        int                     FAMILY ID
+        struct Coordinates      HOUSE
+        struct Coordinates      JOB
+        int                     AGE
+
+        DEBUG:
+        struct Coordinates      COORDINATES
+        int                     DATE OF INFECTION
+        int                     INCUBATION DURATION
+        int                     INFECTION DURATION
+        float                   PENALTIES
+        float                   REWARDS
+        int                     DATE OF DEATH
 ```
+#### <center>*2. IMMUNITY*
 
-#### <center>*2. PHASES*
+* Each cell has it's own base immunity which is being randomized at start.
+* Afterwarts immunity calculated by rule: 
 
-```python
-        STATUS:         VALUE       
-        -------         -----
-        not infected    1  
-        vaccinated      2
-        incubation      4 
-        infected        5
-        recovered       -1
-        dead            -2 
-        empty           None 
+![Rule](https://latex.codecogs.com/png.image?\dpi{110}%20B*\frac{2.5}{\sqrt{2\pi}}e^{-\left(2x-1\right)^{2}}%20+%20\sum%20R%20-%20\sum%20P)
+where: ![Rule](https://latex.codecogs.com/png.image?\dpi{110}%20B) - base immunity, ![Rule](https://latex.codecogs.com/png.image?\dpi{110}%20A) - age, ![Rule](https://latex.codecogs.com/png.image?\dpi{110}%20R) - immunity rewards, ![Rule](https://latex.codecogs.com/png.image?\dpi{110}%20P)- immunity penalties  
+
+
+#### <center>*3. PHASES*
+
+```c
+        STATUS:         
+        -------         
+        not_infected    
+        vaccinated      
+        incubation      
+        infected        
+        recovered       
+        dead            
 ```
 
 **2.1) INCUBATION**
@@ -41,7 +52,7 @@
 * Some percent of cells get infected during 1st generation
 * Their incubation duration is calculated by the rule: 
 
-```python
+```c
         incubation = (l_bound + (l_bound - u_bound)) * cos(immunity)
 ```
 * During incubation cells have lower chance of infecting the others
@@ -53,13 +64,13 @@
 * After incubation phase cell gets completely infected
 * Duration of infection phase is being calculated by the rule: 
 
-```python
+```c
         infection = (l_bound + (l_bound - u_bound)) * sin(immunity)
 ```
 * From now on it has a higher chance of infecting other cells and a risk of dying
 * Chance of dying is calculated by the rule: 
 
-```python
+```c
         chance = cos(self.calc_immunity(i, j)) ** 5
 ```
 * Immunity penalty lowers during that peroid
@@ -72,7 +83,7 @@
 
 * All cell are unvaccinated at the beginning
 * Chance of vaccination starts at 5% and raises by the rule
-```python
+```c
         vac_attractiveness = vac_base_attractiveness * death_count
 ```
 
@@ -85,11 +96,11 @@
 * After that, cell dissapears
 
 
-#### <center>*2. BEHAVIOUR*
+#### <center>*4. BEHAVIOUR*
 
 * Each cell has it's own behavoiur. All behaviour types are listed in a table:
 
-```python
+```c
         VALUE       BEHAVIOUR   
         -----       ---------
         0           RANDOM
@@ -99,9 +110,12 @@
 
 * Behavior is represented in the way of a list containing:
 
-```python
+```c
         behaviour = [type; path; <bool> reached]
 ```
 
 * Random behaviour means that cell is randomly roaming around. It may be canceled at any time
 * Other types of behaviour needs to be marked to be "done", and cannot be interrupted.
+
+#### <center>*5. MISC*
+* Every iteration equals 1/4 of a day

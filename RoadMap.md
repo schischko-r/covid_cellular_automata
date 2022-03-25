@@ -19,7 +19,12 @@ ___
     - [x] Family and house
 ___
 **[v.2.2]**
-- [ ] Implement Pygame
+- [x] Implement Pygame
+- [x] Implement age system
+- [ ] Implement interface
+- [x] Implement clicks
+- [ ] Implement different penalties: f.e. stress, bad weather
+- [x] If Reached 
 ___
 **[v.3]**
 - [ ] Day/night cycle & corresponding behaviour
