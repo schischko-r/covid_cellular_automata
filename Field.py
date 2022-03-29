@@ -50,16 +50,16 @@ class Field:
         self._MIN_AGE = 5
         self._MAX_AGE = 90
 
-        self._VACCINATION_BASE_ATTRACTIVENESS = 5e-3
+        self._VACCINATION_BASE_ATTRACTIVENESS = 5e-5
         self._VACCINATION_ATTRACTIVENESS = 1e-4
 
-        self._L_INIT_IMMUNITY = 0.2
-        self._U_INIT_IMMUNITY = 0.5
+        self._L_INIT_IMMUNITY = 0.5
+        self._U_INIT_IMMUNITY = 0.8
 
-        self._L_INF_FROM_INCUBATED_CHANCE = 0.4
-        self._U_INF_FROM_INCUBATED_CHANCE = 0.6
+        self._L_INF_FROM_INCUBATED_CHANCE = 0.3
+        self._U_INF_FROM_INCUBATED_CHANCE = 0.4
 
-        self._L_INF_FROM_SICK_CHANCE = 0.6
+        self._L_INF_FROM_SICK_CHANCE = 0.4
         self._U_INF_FROM_SICK_CHANCE = 0.95
 
         self._L_INC_DURATION = 3
@@ -68,15 +68,15 @@ class Field:
         self._L_INF_DURATION = 0
         self._U_INF_DURATION = 14
 
-        self._SICKNESS_PENALTY = 0.2
-        self._CURE_IMMUNITY = 0.2
-        self._VACC_IMMUNITY = 0.3
+        self._SICKNESS_PENALTY = 0
+        self._CURE_IMMUNITY = 0.1
+        self._VACC_IMMUNITY = 0.15
 
         self._CLEANING_TIME = 3
-
+        self.CLUSER_AMOUNT = 2
         self._DEATHS = 1
 
-        self._CHANGING_BEHAVIOUR_LIKENESS = 0.1
+        self._CHANGING_BEHAVIOUR_LIKENESS = 0.01
 
         self.init_pops(perc_of_filled, perc_of_infected)
 
@@ -89,6 +89,18 @@ class Field:
         families = math.floor(
             cells_amount / random.randint(self._MIN_FAMILY_SIZE, self._MAX_FAMILY_SIZE)
         )
+
+        self.clusters = []
+        for cluster in range(self.CLUSER_AMOUNT):
+            self.clusters.append(
+                {
+                    "center": [
+                        random.randint(0, self._SIZE),
+                        random.randint(0, self._SIZE),
+                    ],
+                    "radius": random.randint(0, math.floor(self._SIZE / 8)),
+                }
+            )
 
         for family in range(families):
             self.family_houses.append(
@@ -149,6 +161,7 @@ class Field:
                 self.family_houses[family_id],  # HOUSE
                 self.jobs[family_id],  # WORK
                 random.randint(self._MIN_AGE, self._MAX_AGE),  # AGE
+                random.randint(0, self.CLUSER_AMOUNT - 1),
             ]
         else:
             self.populate_cell(family_id)
@@ -197,9 +210,8 @@ class Field:
 
     def calc_immunity(self, i, j):
         return (
-            self._POP[i][j][1]
-            * (2.5 / math.sqrt(2 * math.pi))
-            * math.exp(-((2 * self._POP[i][j][12] - 1) ** 2))
+            self._POP[i][j][1] * (2.5 / math.sqrt(2 * math.pi))
+            # * math.exp(-((2 * self._POP[i][j][12] - 1) ** 2))
             + sum(self._POP[i][j][7])
             - sum(self._POP[i][j][6])
         )
@@ -390,6 +402,35 @@ class Field:
             self.move_to_cell((i, j), (i, (j + 1) % self._SIZE))
         else:
             self.choose_direction_randomly(i, j)
+
+        if self._POP[i][j] != None:
+            if (
+                i
+                < self.clusters[self._POP[i][j][13]]["center"][0]
+                - self.clusters[self._POP[i][j][13]]["radius"]
+            ):
+                self.move_to_cell((i, j), ((i + 1) % self._SIZE, j))
+
+            elif (
+                i
+                > self.clusters[self._POP[i][j][13]]["center"][0]
+                + self.clusters[self._POP[i][j][13]]["radius"]
+            ):
+                self.move_to_cell((i, j), ((i - 1) % self._SIZE, j))
+
+            elif (
+                j
+                < self.clusters[self._POP[i][j][13]]["center"][1]
+                - self.clusters[self._POP[i][j][13]]["radius"]
+            ):
+                self.move_to_cell((i, j), (i, (j + 1) % self._SIZE))
+
+            elif (
+                j
+                > self.clusters[self._POP[i][j][13]]["center"][1]
+                + self.clusters[self._POP[i][j][13]]["radius"]
+            ):
+                self.move_to_cell((i, j), (i, (j - 1) % self._SIZE))
 
     def find_path_home(self, i, j):
         self.update_statuses()

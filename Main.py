@@ -68,6 +68,7 @@ class Game:
     def start(self):
         self.running = True
         self.highlighting = False
+        self.field.clear()
 
     def stop(self):
         self.running = False
@@ -163,4 +164,4 @@ class Game:
             print("TYPE: EMPTY")
 
 
-g = Game(size=25, perc_of_filled=5, perc_of_infected=20, window_width=600)
+g = Game(size=25, perc_of_filled=20, perc_of_infected=20, window_width=600)
